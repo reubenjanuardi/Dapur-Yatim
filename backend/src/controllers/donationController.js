@@ -1,5 +1,10 @@
-const db = require('../config/database')
+/**
+ * Controller: Donation
+ * Handler untuk endpoint donasi
+ */
+const Donation = require('../models/Donation')
 const emailService = require('../services/emailService')
+const paymentService = require('../services/paymentService')
 
 /**
  * GET /api/v1/donations/stats
@@ -7,26 +12,8 @@ const emailService = require('../services/emailService')
  */
 const getStats = async (req, res, next) => {
   try {
-    const [totalAmount] = await db('donations')
-      .sum('amount as total')
-      .where('status', 'confirmed')
-
-    const [totalDonors] = await db('donations')
-      .countDistinct('donor_email as count')
-      .where('status', 'confirmed')
-
-    const [totalChildren] = await db('beneficiaries')
-      .count('id as count')
-      .where('is_active', true)
-
-    res.json({
-      success: true,
-      data: {
-        total_amount: parseInt(totalAmount.total) || 0,
-        total_donors: parseInt(totalDonors.count) || 0,
-        total_children: parseInt(totalChildren.count) || 0,
-      },
-    })
+    const stats = await Donation.getPublicStats()
+    res.json({ success: true, data: stats })
   } catch (error) {
     next(error)
   }
@@ -40,30 +27,87 @@ const create = async (req, res, next) => {
   try {
     const { donor_name, donor_email, donor_phone, amount, payment_method, message } = req.body
 
-    const [donation] = await db('donations')
-      .insert({
-        donor_name,
-        donor_email,
-        donor_phone,
-        amount,
-        payment_method,
-        message: message || null,
-        status: 'pending',
-        created_at: new Date(),
-      })
-      .returning(['id', 'donor_name', 'amount', 'payment_method', 'status', 'created_at'])
+    const donation = await Donation.create({
+      donor_name,
+      donor_email,
+      donor_phone: donor_phone || null,
+      amount,
+      payment_method,
+      message: message || null,
+    })
 
-    // Kirim email konfirmasi
-    await emailService.sendDonationConfirmation({
+    // Generate instruksi pembayaran sesuai metode
+    const paymentInstruction = paymentService.generatePaymentInstruction({
+      paymentMethod: payment_method,
+      amount,
+      donationId: donation.id,
+    })
+
+    // Kirim email konfirmasi (non-blocking — error email tidak menggagalkan donasi)
+    emailService.sendDonationConfirmation({
       to: donor_email,
       donorName: donor_name,
       amount,
       donationId: donation.id,
-    }).catch((err) => console.warn('Email gagal dikirim:', err.message))
+    }).catch((err) => console.warn('[Email] Gagal mengirim konfirmasi donasi:', err.message))
 
     res.status(201).json({
       success: true,
-      message: 'Donasi berhasil disubmit. Kami akan mengirimkan konfirmasi ke email Anda.',
+      message: 'Donasi berhasil disubmit. Silakan selesaikan pembayaran sesuai instruksi.',
+      data: {
+        ...donation,
+        payment_instruction: paymentInstruction,
+      },
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * GET /api/v1/donations (Admin only)
+ * Ambil list semua donasi dengan filter dan pagination
+ */
+const getAll = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query
+    const result = await Donation.findAll({
+      page: parseInt(page),
+      limit: parseInt(limit),
+      status,
+    })
+    res.json({ success: true, ...result })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * PATCH /api/v1/admin/donations/:id/status (Admin only)
+ * Update status donasi
+ */
+const updateStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+
+    if (!['confirmed', 'rejected'].includes(status)) {
+      return res.status(422).json({
+        success: false,
+        message: 'Status tidak valid. Gunakan: confirmed atau rejected.',
+      })
+    }
+
+    const confirmedAt = status === 'confirmed' ? new Date() : null
+    const donation = await Donation.updateStatus(parseInt(id), status, confirmedAt)
+
+    if (!donation) {
+      return res.status(404).json({ success: false, message: 'Donasi tidak ditemukan.' })
+    }
+
+    res.json({
+      success: true,
+      message: `Status donasi berhasil diubah menjadi ${status}.`,
       data: donation,
     })
   } catch (error) {
@@ -71,4 +115,4 @@ const create = async (req, res, next) => {
   }
 }
 
-module.exports = { getStats, create }
+module.exports = { getStats, create, getAll, updateStatus }

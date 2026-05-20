@@ -1,8 +1,14 @@
+/**
+ * Routes: Contact
+ * Endpoint publik untuk formulir kontak
+ */
 const express = require('express')
 const router = express.Router()
-const controller = require('../controllers/contactController')
+const contactController = require('../controllers/contactController')
+const validateRequest = require('../middleware/validateRequest')
+const { createContactSchema } = require('../middleware/validateRequest')
 
-// TODO: Add contact routes
-router.get('/', controller.getAll)
+// POST /api/v1/contact — Kirim pesan kontak baru
+router.post('/', validateRequest(createContactSchema), contactController.send)
 
 module.exports = router
