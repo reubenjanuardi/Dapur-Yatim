@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-surface text-on-surface font-sans antialiased;
+    font-feature-settings: 'kern' 1;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-tertiary-container text-white font-semibold rounded-lg shadow-button transition-all duration-200 hover:opacity-90 hover:shadow-card-hover active:scale-95;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary border border-outline-variant font-semibold rounded-lg transition-all duration-200 hover:bg-surface-low hover:border-primary active:scale-95;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-card p-6 transition-shadow duration-200 hover:shadow-card-hover;
+  }
+  .section-padding {
+    @apply py-16 md:py-20;
+  }
+  .container-default {
+    @apply max-w-6xl mx-auto px-4 md:px-6;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 border border-outline-variant rounded-lg text-on-surface bg-white placeholder:text-outline focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200;
+  }
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-on-surface leading-tight tracking-tight;
+  }
+  .section-subtitle {
+    @apply text-lg text-on-surface-variant leading-relaxed mt-3;
+  }
+}
