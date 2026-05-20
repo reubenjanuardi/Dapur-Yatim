@@ -74,7 +74,7 @@ Submit donasi baru dari calon donatur.
 | `donor_email` | string | ✅ | Format email valid |
 | `donor_phone` | string | ❌ | Format nomor telepon |
 | `amount` | integer | ✅ | Minimal Rp 10.000 |
-| `payment_method` | enum | ✅ | `bank_transfer`, `qris`, `e_wallet` |
+| `payment_method` | enum | ✅ | `bank_transfer`, `qris` |
 | `message` | string | ❌ | Maks 500 karakter |
 
 **Response 201:**

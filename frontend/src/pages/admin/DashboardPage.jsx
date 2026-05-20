@@ -18,7 +18,6 @@ const STATUS_FILTERS = [
 const METHOD_LABELS = {
   bank_transfer: 'Transfer Bank',
   qris: 'QRIS',
-  e_wallet: 'E-Wallet',
 }
 
 export default function AdminDashboardPage() {

@@ -44,3 +44,11 @@ coverage/
 
 # ─── Docker ───────────────────────────────────────────────
 .docker/
+
+# ─── AI Files ───────────────────────────────────────────────
+.opencode/
+.agent/
+.gemini/
+.claude/
+.cursor/
+.antigravity/  

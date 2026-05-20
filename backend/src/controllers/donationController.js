@@ -40,7 +40,6 @@ const create = async (req, res, next) => {
     const paymentInstruction = paymentService.generatePaymentInstruction({
       paymentMethod: payment_method,
       amount,
-      donationId: donation.id,
     })
 
     // Kirim email konfirmasi (non-blocking — error email tidak menggagalkan donasi)

@@ -16,7 +16,7 @@ Menyimpan seluruh data transaksi donasi yang masuk.
 | `donor_email` | VARCHAR(150) | Email donatur |
 | `donor_phone` | VARCHAR(20) | Nomor telepon (opsional) |
 | `amount` | BIGINT | Nominal donasi (Rupiah) |
-| `payment_method` | ENUM | `bank_transfer`, `qris`, `e_wallet` |
+| `payment_method` | ENUM | `bank_transfer`, `qris` |
 | `status` | ENUM | `pending`, `confirmed`, `rejected` |
 | `message` | TEXT | Pesan dari donatur |
 | `proof_of_payment` | VARCHAR(255) | Path file bukti transfer |

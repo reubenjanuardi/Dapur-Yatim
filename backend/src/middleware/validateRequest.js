@@ -19,7 +19,7 @@ const createDonationSchema = Joi.object({
     'any.required': 'Nominal donasi wajib diisi.',
   }),
   payment_method: Joi.string()
-    .valid('bank_transfer', 'qris', 'e_wallet')
+    .valid('bank_transfer', 'qris')
     .required()
     .messages({ 'any.only': 'Metode pembayaran tidak valid.' }),
   message: Joi.string().max(500).optional().allow(''),
