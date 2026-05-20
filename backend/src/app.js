@@ -55,10 +55,33 @@ app.use((req, res) => {
 // ─── Global Error Handler ─────────────────────────────────────────
 app.use(errorHandler)
 
-// ─── Start Server ─────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`✅ Server berjalan di http://localhost:${PORT}`)
-  console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`)
-})
+// ─── Start Server (with Supabase validation) ──────────────────────
+const supabase = require('./config/supabase')
+
+async function startServer() {
+  try {
+    console.log('🔄 Menghubungkan ke Supabase...')
+    const { error } = await supabase.from('admins').select('id').limit(1)
+    if (error) {
+      console.warn('⚠️  Peringatan Koneksi Supabase: Gagal mengakses tabel "admins".\n' + 
+                   '   Harap jalankan script "database/supabase_setup.sql" di SQL Editor Supabase Anda.\n' +
+                   '   Detail error: ' + error.message)
+    } else {
+      console.log('✅ Koneksi Supabase berhasil diverifikasi.')
+    }
+
+    app.listen(PORT, () => {
+      console.log(`✅ Server berjalan di http://localhost:${PORT}`)
+      console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`)
+    })
+  } catch (error) {
+    console.error('❌ Gagal memulai server:', error.message)
+    process.exit(1)
+  }
+}
+
+startServer()
 
 module.exports = app
+
+

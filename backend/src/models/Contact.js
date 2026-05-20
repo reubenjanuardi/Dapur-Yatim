@@ -1,9 +1,8 @@
 /**
  * Model: Contact
- * Abstraksi query database untuk tabel contacts (pesan masuk dari form kontak)
+ * Abstraksi query database untuk tabel contacts menggunakan Supabase JS Client
  */
-const db = require('../config/database')
-const { insertAndFetch, updateAndFetch } = require('../utils/dbHelpers')
+const supabase = require('../config/supabase')
 
 const Contact = {
   /**
@@ -13,13 +12,20 @@ const Contact = {
    */
   async create(data) {
     try {
-      const contact = await insertAndFetch(db, 'contacts', {
-        ...data,
-        is_read: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      return contact
+      const now = new Date().toISOString()
+      const { data: newContact, error } = await supabase
+        .from('contacts')
+        .insert({
+          ...data,
+          is_read: false,
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return newContact
     } catch (error) {
       throw new Error(`Contact.create gagal: ${error.message}`)
     }
@@ -32,29 +38,29 @@ const Contact = {
    */
   async findAll({ isRead, page = 1, limit = 20 } = {}) {
     try {
-      const offset = (page - 1) * limit
+      const from = (page - 1) * limit
+      const to = from + limit - 1
 
-      const buildQuery = (q) => {
-        if (isRead !== undefined) q.where('is_read', isRead)
+      let query = supabase
+        .from('contacts')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+
+      if (isRead !== undefined) {
+        query = query.eq('is_read', isRead)
       }
 
-      const [{ count }] = await db('contacts')
-        .count('id as count')
-        .modify(buildQuery)
+      const { data, count, error } = await query.range(from, to)
 
-      const data = await db('contacts')
-        .modify(buildQuery)
-        .orderBy('created_at', 'desc')
-        .limit(limit)
-        .offset(offset)
+      if (error) throw error
 
       return {
-        data,
+        data: data || [],
         meta: {
-          total: parseInt(count),
+          total: count || 0,
           page,
           limit,
-          total_pages: Math.ceil(parseInt(count) / limit),
+          total_pages: Math.ceil((count || 0) / limit),
         },
       }
     } catch (error) {
@@ -69,11 +75,18 @@ const Contact = {
    */
   async markAsRead(id) {
     try {
-      const contact = await updateAndFetch(db, 'contacts', { id }, {
-        is_read: true,
-        updated_at: new Date().toISOString(),
-      })
-      return contact
+      const { data, error } = await supabase
+        .from('contacts')
+        .update({
+          is_read: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
     } catch (error) {
       throw new Error(`Contact.markAsRead gagal: ${error.message}`)
     }

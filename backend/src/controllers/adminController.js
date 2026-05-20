@@ -1,8 +1,8 @@
 /**
  * Controller: Admin
- * Handler untuk autentikasi dan manajemen admin panel
+ * Handler untuk autentikasi dan manajemen admin panel menggunakan Supabase JS Client
  */
-const db = require('../config/database')
+const supabase = require('../config/supabase')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const config = require('../config/env')
@@ -23,12 +23,15 @@ const login = async (req, res, next) => {
       })
     }
 
-    // Cari admin berdasarkan email
-    const admin = await db('admins')
-      .where({ email, is_active: true })
-      .first()
+    // Cari admin berdasarkan email di Supabase
+    const { data: admin, error } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('email', email)
+      .eq('is_active', true)
+      .single()
 
-    if (!admin) {
+    if (error || !admin) {
       return res.status(401).json({
         success: false,
         message: 'Email atau password salah.',
@@ -45,7 +48,10 @@ const login = async (req, res, next) => {
     }
 
     // Update last_login_at
-    await db('admins').where({ id: admin.id }).update({ last_login_at: new Date() })
+    await supabase
+      .from('admins')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', admin.id)
 
     // Generate JWT token
     const token = jwt.sign(
@@ -78,12 +84,13 @@ const login = async (req, res, next) => {
  */
 const getMe = async (req, res, next) => {
   try {
-    const admin = await db('admins')
-      .where({ id: req.admin.id })
-      .select('id', 'name', 'email', 'role', 'last_login_at', 'created_at')
-      .first()
+    const { data: admin, error } = await supabase
+      .from('admins')
+      .select('id, name, email, role, last_login_at, created_at')
+      .eq('id', req.admin.id)
+      .single()
 
-    if (!admin) {
+    if (error || !admin) {
       return res.status(404).json({ success: false, message: 'Admin tidak ditemukan.' })
     }
 

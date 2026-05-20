@@ -1,9 +1,8 @@
 /**
  * Model: Report
- * Abstraksi query database untuk tabel financial_reports
+ * Abstraksi query database untuk tabel financial_reports menggunakan Supabase JS Client
  */
-const db = require('../config/database')
-const { insertAndFetch } = require('../utils/dbHelpers')
+const supabase = require('../config/supabase')
 
 const Report = {
   /**
@@ -13,18 +12,24 @@ const Report = {
    */
   async findAll({ year, isPublished = true } = {}) {
     try {
-      let query = db('financial_reports')
+      let query = supabase
+        .from('financial_reports')
+        .select('*')
+        .order('report_year', { ascending: false })
+        .order('report_month', { ascending: false })
 
       if (isPublished !== undefined) {
-        query = query.where('is_published', isPublished)
+        query = query.eq('is_published', isPublished)
       }
 
       if (year) {
-        query = query.where('report_year', year)
+        query = query.eq('report_year', year)
       }
 
-      const data = await query.orderBy('report_year', 'desc').orderBy('report_month', 'desc')
-      return data
+      const { data, error } = await query
+
+      if (error) throw error
+      return data || []
     } catch (error) {
       throw new Error(`Report.findAll gagal: ${error.message}`)
     }
@@ -37,8 +42,17 @@ const Report = {
    */
   async findById(id) {
     try {
-      const report = await db('financial_reports').where({ id }).first()
-      return report || null
+      const { data, error } = await supabase
+        .from('financial_reports')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') return null // Single row not found
+        throw error
+      }
+      return data || null
     } catch (error) {
       throw new Error(`Report.findById gagal: ${error.message}`)
     }
@@ -51,12 +65,19 @@ const Report = {
    */
   async create(data) {
     try {
-      const report = await insertAndFetch(db, 'financial_reports', {
-        ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      return report
+      const now = new Date().toISOString()
+      const { data: newReport, error } = await supabase
+        .from('financial_reports')
+        .insert({
+          ...data,
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return newReport
     } catch (error) {
       throw new Error(`Report.create gagal: ${error.message}`)
     }
@@ -70,17 +91,21 @@ const Report = {
    */
   async getSummaryByYear(year) {
     try {
-      const reports = await db('financial_reports')
-        .where({ report_year: year, is_published: true })
-        .select(
-          'report_month as month',
-          'total_income as income',
-          'total_expense as expense',
-          db.raw('(total_income - total_expense) as surplus')
-        )
-        .orderBy('report_month', 'asc')
+      const { data, error } = await supabase
+        .from('financial_reports')
+        .select('report_month, total_income, total_expense')
+        .eq('report_year', year)
+        .eq('is_published', true)
+        .order('report_month', { ascending: true })
 
-      return reports
+      if (error) throw error
+
+      return (data || []).map((row) => ({
+        month: row.report_month,
+        income: row.total_income,
+        expense: row.total_expense,
+        surplus: row.total_income - row.total_expense,
+      }))
     } catch (error) {
       throw new Error(`Report.getSummaryByYear gagal: ${error.message}`)
     }
@@ -92,11 +117,17 @@ const Report = {
    */
   async getAvailableYears() {
     try {
-      const rows = await db('financial_reports')
-        .distinct('report_year')
-        .where('is_published', true)
-        .orderBy('report_year', 'desc')
-      return rows.map((r) => r.report_year)
+      const { data, error } = await supabase
+        .from('financial_reports')
+        .select('report_year')
+        .eq('is_published', true)
+        .order('report_year', { ascending: false })
+
+      if (error) throw error
+
+      // Ambil distinct years dari data hasil fetch
+      const years = Array.from(new Set((data || []).map((row) => row.report_year)))
+      return years
     } catch (error) {
       throw new Error(`Report.getAvailableYears gagal: ${error.message}`)
     }

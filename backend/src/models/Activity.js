@@ -1,9 +1,8 @@
 /**
  * Model: Activity
- * Abstraksi query database untuk tabel activities
+ * Abstraksi query database untuk tabel activities menggunakan Supabase JS Client
  */
-const db = require('../config/database')
-const { insertAndFetch, updateAndFetch } = require('../utils/dbHelpers')
+const supabase = require('../config/supabase')
 
 const Activity = {
   /**
@@ -13,30 +12,33 @@ const Activity = {
    */
   async findAll({ page = 1, limit = 9, category, isPublished = true } = {}) {
     try {
-      const offset = (page - 1) * limit
+      const from = (page - 1) * limit
+      const to = from + limit - 1
 
-      const buildQuery = (q) => {
-        if (isPublished !== undefined) q.where('is_published', isPublished)
-        if (category && category !== 'all') q.where('category', category)
+      let query = supabase
+        .from('activities')
+        .select('*', { count: 'exact' })
+        .order('activity_date', { ascending: false })
+
+      if (isPublished !== undefined) {
+        query = query.eq('is_published', isPublished)
       }
 
-      const [{ count }] = await db('activities')
-        .count('id as count')
-        .modify(buildQuery)
+      if (category && category !== 'all') {
+        query = query.eq('category', category)
+      }
 
-      const data = await db('activities')
-        .modify(buildQuery)
-        .orderBy('activity_date', 'desc')
-        .limit(limit)
-        .offset(offset)
+      const { data, count, error } = await query.range(from, to)
+
+      if (error) throw error
 
       return {
-        data,
+        data: data || [],
         meta: {
-          total: parseInt(count),
+          total: count || 0,
           page,
           limit,
-          total_pages: Math.ceil(parseInt(count) / limit),
+          total_pages: Math.ceil((count || 0) / limit),
         },
       }
     } catch (error) {
@@ -52,10 +54,22 @@ const Activity = {
    */
   async findById(id, publicOnly = true) {
     try {
-      let query = db('activities').where({ id })
-      if (publicOnly) query = query.where('is_published', true)
-      const activity = await query.first()
-      return activity || null
+      let query = supabase
+        .from('activities')
+        .select('*')
+        .eq('id', id)
+
+      if (publicOnly) {
+        query = query.eq('is_published', true)
+      }
+
+      const { data, error } = await query.single()
+
+      if (error) {
+        if (error.code === 'PGRST116') return null // Single row not found
+        throw error
+      }
+      return data || null
     } catch (error) {
       throw new Error(`Activity.findById gagal: ${error.message}`)
     }
@@ -68,12 +82,19 @@ const Activity = {
    */
   async create(data) {
     try {
-      const activity = await insertAndFetch(db, 'activities', {
-        ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      return activity
+      const now = new Date().toISOString()
+      const { data: newActivity, error } = await supabase
+        .from('activities')
+        .insert({
+          ...data,
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return newActivity
     } catch (error) {
       throw new Error(`Activity.create gagal: ${error.message}`)
     }
@@ -87,11 +108,18 @@ const Activity = {
    */
   async update(id, data) {
     try {
-      const activity = await updateAndFetch(db, 'activities', { id }, {
-        ...data,
-        updated_at: new Date().toISOString(),
-      })
-      return activity
+      const { data: updatedActivity, error } = await supabase
+        .from('activities')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return updatedActivity
     } catch (error) {
       throw new Error(`Activity.update gagal: ${error.message}`)
     }
@@ -104,8 +132,13 @@ const Activity = {
    */
   async delete(id) {
     try {
-      const count = await db('activities').where({ id }).del()
-      return count
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      return 1 // return count of deleted row
     } catch (error) {
       throw new Error(`Activity.delete gagal: ${error.message}`)
     }

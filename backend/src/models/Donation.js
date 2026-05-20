@@ -1,9 +1,8 @@
 /**
  * Model: Donation
- * Abstraksi query database untuk tabel donations
+ * Abstraksi query database untuk tabel donations menggunakan Supabase JS Client
  */
-const db = require('../config/database')
-const { insertAndFetch, updateAndFetch } = require('../utils/dbHelpers')
+const supabase = require('../config/supabase')
 
 const Donation = {
   /**
@@ -13,26 +12,29 @@ const Donation = {
    */
   async findAll({ page = 1, limit = 10, status } = {}) {
     try {
-      const offset = (page - 1) * limit
-      let query = db('donations').orderBy('created_at', 'desc')
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+
+      let query = supabase
+        .from('donations')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
 
       if (status) {
-        query = query.where('status', status)
+        query = query.eq('status', status)
       }
 
-      const [{ count }] = await db('donations')
-        .count('id as count')
-        .modify((q) => { if (status) q.where('status', status) })
+      const { data, count, error } = await query.range(from, to)
 
-      const data = await query.limit(limit).offset(offset)
+      if (error) throw error
 
       return {
-        data,
+        data: data || [],
         meta: {
-          total: parseInt(count),
+          total: count || 0,
           page,
           limit,
-          total_pages: Math.ceil(parseInt(count) / limit),
+          total_pages: Math.ceil((count || 0) / limit),
         },
       }
     } catch (error) {
@@ -47,8 +49,17 @@ const Donation = {
    */
   async findById(id) {
     try {
-      const donation = await db('donations').where({ id }).first()
-      return donation || null
+      const { data, error } = await supabase
+        .from('donations')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') return null // Single row not found
+        throw error
+      }
+      return data || null
     } catch (error) {
       throw new Error(`Donation.findById gagal: ${error.message}`)
     }
@@ -61,13 +72,20 @@ const Donation = {
    */
   async create(data) {
     try {
-      const donation = await insertAndFetch(db, 'donations', {
-        ...data,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      return donation
+      const now = new Date().toISOString()
+      const { data: newDonation, error } = await supabase
+        .from('donations')
+        .insert({
+          ...data,
+          status: 'pending',
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return newDonation
     } catch (error) {
       throw new Error(`Donation.create gagal: ${error.message}`)
     }
@@ -82,12 +100,19 @@ const Donation = {
    */
   async updateStatus(id, status, confirmedAt = null) {
     try {
-      const donation = await updateAndFetch(db, 'donations', { id }, {
-        status,
-        confirmed_at: confirmedAt ? confirmedAt.toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      return donation
+      const { data, error } = await supabase
+        .from('donations')
+        .update({
+          status,
+          confirmed_at: confirmedAt ? confirmedAt.toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
     } catch (error) {
       throw new Error(`Donation.updateStatus gagal: ${error.message}`)
     }
@@ -95,34 +120,44 @@ const Donation = {
 
   /**
    * Ambil statistik donasi publik
-   * Graceful fallback jika tabel beneficiaries belum ada
    * @returns {Promise<{total_amount: number, total_donors: number, total_children: number}>}
    */
   async getPublicStats() {
     try {
-      const [{ total }] = await db('donations')
-        .sum('amount as total')
-        .where('status', 'confirmed')
+      // Hitung total sum amount donasi yang confirmed
+      // Supabase JS tidak support sum() langsung tanpa rpc atau select custom.
+      // Solusi termudah yang andal: select all confirmed amounts
+      const { data: donations, error: donError } = await supabase
+        .from('donations')
+        .select('amount, donor_email')
+        .eq('status', 'confirmed')
 
-      const [{ count: donorCount }] = await db('donations')
-        .countDistinct('donor_email as count')
-        .where('status', 'confirmed')
+      if (donError) throw donError
 
-      // Graceful fallback jika tabel beneficiaries belum ada
+      const totalAmount = donations.reduce((sum, row) => sum + (row.amount || 0), 0)
+      
+      // Hitung unique donor_email
+      const uniqueEmails = new Set(donations.map(row => row.donor_email).filter(Boolean))
+      const totalDonors = uniqueEmails.size
+
+      // Ambil beneficiaries count (default fallback: 250)
       let totalChildren = 250
       try {
-        const [{ count }] = await db('beneficiaries')
-          .count('id as count')
-          .where('is_active', true)
-        totalChildren = parseInt(count) || 250
+        const { count, error: benError } = await supabase
+          .from('beneficiaries')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true)
+
+        if (!benError && count !== null) {
+          totalChildren = count
+        }
       } catch {
-        // tabel belum ada, gunakan nilai default
-        totalChildren = 250
+        // tabel belum ada, gunakan default
       }
 
       return {
-        total_amount: parseInt(total) || 0,
-        total_donors: parseInt(donorCount) || 0,
+        total_amount: totalAmount,
+        total_donors: totalDonors,
         total_children: totalChildren,
       }
     } catch (error) {

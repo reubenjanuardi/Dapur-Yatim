@@ -21,7 +21,7 @@ function requireEnv(keys) {
 
 // Validasi ENV wajib di production
 requireEnv([
-  'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD',
+  'SUPABASE_URL', 'SUPABASE_KEY',
   'JWT_SECRET',
 ])
 
@@ -37,13 +37,10 @@ const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
   },
 
-  /** Konfigurasi koneksi database PostgreSQL */
-  db: {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT) || 5432,
-    name: process.env.DB_NAME || 'dapur_yatim_db',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '',
+  /** Konfigurasi Supabase Client */
+  supabase: {
+    url: process.env.SUPABASE_URL || 'https://qzymwnkgfsngctugupcu.supabase.co',
+    key: process.env.SUPABASE_KEY || 'sb_publishable_0ywwzjrTeAcEx8cOy4DXsA_HcEzw0Km',
   },
 
   /** Konfigurasi JWT authentication */
